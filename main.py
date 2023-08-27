@@ -32,7 +32,7 @@ def randomIP():
 	return ip
 
 def randInt():
-	x = random.randint(1000,1500)
+	x = random.randint(1000,60000)
 	return x	
 
 def syn_flood(dstIP,dstPort):
