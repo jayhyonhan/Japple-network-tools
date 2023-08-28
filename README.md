@@ -1,4 +1,4 @@
-# denial-of-service-scripts
+# DISCLAIMER
 This is for EDUCATIONAL purposes ONLY, and should not be used against anyone or anything without consent.
 
 
